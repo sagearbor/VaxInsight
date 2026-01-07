@@ -1,0 +1,5 @@
+{
+  "name": "VaxInsight: Public Health Dashboard",
+  "description": "A dynamic dashboard analyzing vaccine efficacy, duration, and mortality impact in light of recent HHS guideline changes. Features interactive bubble charts and AI-driven news analysis.",
+  "requestFramePermissions": []
+}
