@@ -9,18 +9,19 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "react": "^19.2.3",
-    "react-dom": "^19.2.3",
-    "prop-types": "15.8.1",
-    "lucide-react": "0.344.0",
-    "clsx": "2.1.0",
+    "@google/genai": "0.2.0",
     "chart.js": "4.4.1",
+    "clsx": "2.1.0",
+    "lucide-react": "0.344.0",
+    "prop-types": "15.8.1",
+    "react": "^18.2.0",
     "react-chartjs-2": "5.2.0",
-    "@google/genai": "0.2.1"
+    "react-dom": "^18.2.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "puppeteer": "^24.34.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   }

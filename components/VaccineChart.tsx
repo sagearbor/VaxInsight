@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useId } from 'react';
 import {
   Chart as ChartJS,
   LinearScale,
+  LogarithmicScale,
   PointElement,
   Tooltip,
   Legend,
@@ -12,7 +13,10 @@ import { Bubble } from 'react-chartjs-2';
 import { VaccineData } from '../types';
 
 // Register ChartJS components locally
-ChartJS.register(LinearScale, PointElement, Tooltip, Legend, BubbleController, Title);
+ChartJS.register(LinearScale, LogarithmicScale, PointElement, Tooltip, Legend, BubbleController, Title);
+
+// Ensure charts are destroyed properly on re-render
+ChartJS.defaults.datasets.bubble.clip = false;
 
 interface VaccineChartProps {
   data: VaccineData[];
@@ -20,6 +24,8 @@ interface VaccineChartProps {
 }
 
 export const VaccineChart: React.FC<VaccineChartProps> = ({ data, yAxisMode }) => {
+  const chartId = useId();
+
   const chartData = {
     datasets: [
       {
@@ -121,7 +127,7 @@ export const VaccineChart: React.FC<VaccineChartProps> = ({ data, yAxisMode }) =
         Vaccine Strategy Matrix
       </h3>
       <div className="relative w-full h-[90%]">
-        <Bubble data={chartData} options={options} />
+        <Bubble key={chartId} id={chartId} data={chartData} options={options} />
       </div>
        <div className="absolute bottom-6 right-6 text-xs text-slate-400 bg-white/90 p-2 rounded pointer-events-none border border-slate-100 shadow-sm z-10">
           Bubble Size = {yAxisMode === 'deaths' ? 'Contagiousness (R0)' : 'Mortality Rate'}

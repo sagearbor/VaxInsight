@@ -296,7 +296,7 @@ export default function App() {
               {data.filter(d => d.deathsPerMillion > 1000).length} <span className="text-lg font-normal text-slate-500">Diseases</span>
             </p>
             <div className="mt-3">
-               <span className="text-xs text-slate-500">Deaths > 1,000 per 1M</span>
+               <span className="text-xs text-slate-500">Deaths &gt; 1,000 per 1M</span>
             </div>
             <p className="text-xs text-slate-400 mt-2 border-t pt-2 border-slate-100">
                 Removing protection significantly increases mortality.

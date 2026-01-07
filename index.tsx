@@ -52,11 +52,9 @@ if (!rootElement) {
 try {
   const root = ReactDOM.createRoot(rootElement);
   root.render(
-    <React.StrictMode>
-      <ErrorBoundary>
-        <App />
-      </ErrorBoundary>
-    </React.StrictMode>
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
   );
   console.log("Application mounted successfully.");
 } catch (error) {
