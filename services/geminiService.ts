@@ -1,24 +1,10 @@
 import { GoogleGenAI } from "@google/genai";
 import { AnalysisResult, VaccineData } from "../types";
 
-// Safe access to environment variables in browser context
-const getEnvVar = (key: string): string | undefined => {
-  try {
-    // Check if process is defined (Node-like env)
-    if (typeof process !== 'undefined' && process.env) {
-      return process.env[key];
-    }
-    // Fallback if injected directly into window (sometimes used in specific bundles)
-    if (typeof window !== 'undefined' && (window as any).process && (window as any).process.env) {
-      return (window as any).process.env[key];
-    }
-    return undefined;
-  } catch (e) {
-    return undefined;
-  }
-};
-
-const API_KEY = getEnvVar('API_KEY');
+// Access Vite environment variables (must be prefixed with VITE_)
+// For local development: create .env file with VITE_GEMINI_API_KEY=your_key
+// For Firebase Studio (idx.google.com): set VITE_GEMINI_API_KEY in .idx/dev.nix or project secrets
+const API_KEY = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
 const hasApiKey = !!API_KEY;
 
 export const analyzeHHSChanges = async (currentData: VaccineData[]): Promise<AnalysisResult> => {
@@ -39,41 +25,52 @@ export const analyzeHHSChanges = async (currentData: VaccineData[]): Promise<Ana
   const prompt = `
     You are a database synchronization agent for a public health dashboard.
     TODAY'S DATE: ${today}
-    
-    CURRENT DATABASE:
+
+    CURRENT DATABASE (use EXACT IDs when returning updates):
     ${vaccineList}
 
-    TASKS:
-    1. **Search Phase**: Search for "HHS CDC vaccine schedule reduction 17 to 11" or "vaccines removed from childhood mandate 2025" or "HHS vaccine announcement today".
-       - Look for the SPECIFIC announcement from HHS regarding changes to the childhood vaccine schedule.
-       - The goal is to identify the reduction from 17 mandated vaccines to 11.
-       - Identify which specific vaccines are being removed, made optional, or restricted to reach the "11 recommended vaccines" target.
+    TASK: Find the latest HHS/CDC childhood vaccine schedule changes and identify ALL vaccines that have been removed, made optional, or had their recommendation status changed.
 
-    2. **Analyze & Infer**: 
-       - Map the news findings to the "CURRENT DATABASE".
-       - If the news mentions reducing the schedule from 17 to 11, identify the 6 most likely candidates for removal based on the announcement.
-       - Common candidates for removal in these discussions are: Flu, Covid, Hepatitis B (at birth), Rotavirus, Varicella (Chickenpox), Hepatitis A, or HPV.
-       - **Do NOT** remove Polio, Measles (MMR), DTaP/Tetanus unless explicitly stated in the announcement.
+    SEARCH QUERIES TO USE:
+    - "HHS childhood vaccine schedule changes 2025"
+    - "CDC recommended vaccines reduced"
+    - "RFK Kennedy vaccine schedule announcement"
+    - "childhood vaccines removed from mandate"
+    - "17 vaccines to 11 vaccines schedule"
 
-    3. **JSON Output Phase**: 
-       - Return a JSON array 'updatedDataHints'.
-       - **Example Output**: 
-         [
-           { "id": "flu", "status": "Modified", "recentChangeDescription": "Removed from mandate in recent HHS overhaul." }, 
-           { "id": "covid", "status": "Modified", "recentChangeDescription": "Shifted to optional/seasonal." },
-           { "id": "varicella", "status": "Modified", "recentChangeDescription": "Requirement lifted." }
-         ]
-       - Ensure you use the EXACT IDs from the "CURRENT DATABASE" list.
-    
-    4. **Summary**: Write a 150-word strategic analysis describing the recent HHS announcement. Discuss the rationale cited (e.g., "bloated schedule", "focus on core diseases") and the potential public health trade-offs.
+    CRITICAL REQUIREMENTS:
+    1. The recent HHS announcement reduced recommended childhood vaccines from 17 to 11, meaning 6 VACCINES WERE REMOVED OR MADE OPTIONAL.
+    2. You MUST identify and return ALL 6 vaccines that were changed - not just 2 or 3.
+    3. For each changed vaccine, provide EXACTLY these 3 fields:
+       - id: The EXACT "id" from the CURRENT DATABASE above (e.g., "flu", "covid")
+       - status: ONLY the word "Modified" (nothing else!)
+       - recentChangeDescription: ONE SHORT SENTENCE (max 15 words) describing the change (e.g., "Removed from universal recommendation", "Made optional for low-risk groups", "No longer mandated for school entry")
 
-    OUTPUT FORMAT:
-    Strict JSON only. No markdown formatting outside the JSON structure.
+    IMPORTANT: The "status" field must ONLY contain "Modified". Put ALL explanation text in "recentChangeDescription". Keep descriptions SHORT (under 15 words).
+
+    VACCINES LIKELY AFFECTED (verify with search - use exact IDs):
+    - Influenza (id: "flu") - often cited as removed from universal mandate
+    - COVID-19 (id: "covid") - shifted to optional/high-risk only
+    - Varicella/Chickenpox (id: "varicella") - potentially removed
+    - HPV (id: "hpv") - often discussed as optional
+    - Hepatitis B (id: "hepb") - birth dose sometimes removed
+    - Hepatitis A (id: "hepa") - sometimes made optional
+    - Rotavirus (id: "rotavirus") - sometimes made optional
+
+    VACCINES TYPICALLY RETAINED (unless news says otherwise):
+    - MMR/Measles (id: "measles") - usually kept due to high R0
+    - Polio (id: "polio") - usually kept
+    - DTaP series (ids: "dtap-d", "dtap-t", "pertussis") - usually kept
+    - Hib (id: "hib") - usually kept
+    - PCV/Pneumococcal (id: "pcv") - usually kept
+
+    OUTPUT: Return 'updatedDataHints' array with ALL changed vaccines (expect ~6 items based on 17->11 reduction).
+    Also return 'summary' with 150-word strategic analysis of the announcement and public health implications.
   `;
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-pro-preview",
+      model: "gemini-2.0-flash",
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }],
@@ -100,7 +97,8 @@ export const analyzeHHSChanges = async (currentData: VaccineData[]): Promise<Ana
                              id: { type: "STRING" },
                              status: { type: "STRING" },
                              recentChangeDescription: { type: "STRING" }
-                        }
+                        },
+                        required: ["id", "status", "recentChangeDescription"]
                     }
                 }
             }
@@ -125,10 +123,42 @@ export const analyzeHHSChanges = async (currentData: VaccineData[]): Promise<Ana
         });
     }
 
+    // Post-process updatedDataHints to fix AI formatting issues
+    const sanitizedHints = (parsed.updatedDataHints || []).map((hint: any) => {
+      let status = hint.status || 'Modified';
+      let description = hint.recentChangeDescription;
+
+      // If status contains more than just "Modified", extract description from it
+      if (status.length > 20 || status.includes(',') || status.includes('.')) {
+        // Extract first meaningful phrase as description
+        const parts = status.split(/[,.]/).filter((p: string) => p.trim());
+        if (parts.length > 1) {
+          description = parts.slice(1, 3).join('. ').trim().slice(0, 80);
+        } else {
+          description = status.slice(0, 80);
+        }
+        status = 'Modified';
+      }
+
+      // Ensure description exists and is short
+      if (!description || description === 'undefined') {
+        description = 'Recommendation status changed';
+      }
+      if (description.length > 80) {
+        description = description.slice(0, 77) + '...';
+      }
+
+      return {
+        id: hint.id,
+        status: status,
+        recentChangeDescription: description
+      };
+    });
+
     return {
       summary: parsed.summary,
       sources: sources,
-      updatedDataHints: parsed.updatedDataHints
+      updatedDataHints: sanitizedHints
     };
 
   } catch (error) {

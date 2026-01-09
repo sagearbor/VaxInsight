@@ -6,6 +6,71 @@ import { INITIAL_VACCINE_DATA, MOCK_ANALYSIS } from './constants';
 import { VaccineData, AnalysisResult } from './types';
 import { analyzeHHSChanges } from './services/geminiService';
 
+// Simple markdown formatter for basic formatting
+function formatMarkdown(text: string): React.ReactNode {
+  if (!text) return null;
+
+  const lines = text.split('\n').filter(line => line.trim());
+  const elements: React.ReactNode[] = [];
+
+  lines.forEach((line, index) => {
+    const trimmedLine = line.trim();
+
+    // Handle headers (###, ##, #)
+    if (trimmedLine.startsWith('### ')) {
+      elements.push(<h3 key={index} className="text-lg font-bold text-slate-800 mt-4 mb-2">{trimmedLine.slice(4)}</h3>);
+    } else if (trimmedLine.startsWith('## ')) {
+      elements.push(<h2 key={index} className="text-xl font-bold text-slate-800 mt-4 mb-2">{trimmedLine.slice(3)}</h2>);
+    } else if (trimmedLine.startsWith('# ')) {
+      elements.push(<h1 key={index} className="text-2xl font-bold text-slate-800 mt-4 mb-2">{trimmedLine.slice(2)}</h1>);
+    }
+    // Handle bullet points
+    else if (trimmedLine.startsWith('* ') || trimmedLine.startsWith('- ')) {
+      const content = trimmedLine.slice(2);
+      // Process inline formatting (bold with **)
+      const formattedContent = processInlineFormatting(content);
+      elements.push(
+        <li key={index} className="ml-6 mb-1 text-slate-700 list-disc">
+          {formattedContent}
+        </li>
+      );
+    }
+    // Regular paragraph
+    else if (trimmedLine.length > 0) {
+      const formattedContent = processInlineFormatting(trimmedLine);
+      elements.push(<p key={index} className="text-slate-700 leading-relaxed mb-2">{formattedContent}</p>);
+    }
+  });
+
+  return <>{elements}</>;
+}
+
+// Process inline formatting like **bold**
+function processInlineFormatting(text: string): React.ReactNode {
+  const parts: React.ReactNode[] = [];
+  let remaining = text;
+  let key = 0;
+
+  while (remaining.length > 0) {
+    const boldMatch = remaining.match(/\*\*(.+?)\*\*/);
+    if (boldMatch && boldMatch.index !== undefined) {
+      // Add text before bold
+      if (boldMatch.index > 0) {
+        parts.push(remaining.slice(0, boldMatch.index));
+      }
+      // Add bold text
+      parts.push(<strong key={key++} className="font-bold text-slate-800">{boldMatch[1]}</strong>);
+      remaining = remaining.slice(boldMatch.index + boldMatch[0].length);
+    } else {
+      // No more formatting, add remaining text
+      parts.push(remaining);
+      break;
+    }
+  }
+
+  return parts.length > 0 ? <>{parts}</> : text;
+}
+
 export default function App() {
   // Initialize state from LocalStorage safely
   const [data, setData] = useState<VaccineData[]>(() => {
@@ -45,6 +110,11 @@ export default function App() {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
   const [showAboutModal, setShowAboutModal] = useState(false);
+
+  // Suggest Update Modal State
+  const [showSuggestModal, setShowSuggestModal] = useState(false);
+  const [suggestionMessage, setSuggestionMessage] = useState('');
+  const [sendingEmail, setSendingEmail] = useState(false);
 
   // Persistence Effects
   useEffect(() => {
@@ -91,7 +161,7 @@ export default function App() {
       const result = await analyzeHHSChanges(data);
       setAnalysis(result);
       
-      console.log("Received updates from AI:", result.updatedDataHints);
+      console.log("Received updates from AI:", JSON.stringify(result.updatedDataHints, null, 2));
 
       // Critical: Update the local data state based on AI hints
       if (result.updatedDataHints && result.updatedDataHints.length > 0) {
@@ -100,12 +170,15 @@ export default function App() {
           const update = result.updatedDataHints?.find(u => u.id === v.id);
           // If update exists, merge it. Ensure we keep the original structure valid.
           if (update) {
-             console.log(`Updating ${v.name} status to ${update.status}`);
+             console.log(`Updating ${v.name}:`, { status: update.status, recentChangeDescription: update.recentChangeDescription });
              return { ...v, ...update };
           }
           return v;
         });
+        console.log("Updated data with descriptions:", updatedData.filter(v => v.recentChangeDescription).map(v => ({ name: v.name, desc: v.recentChangeDescription })));
         setData(updatedData);
+      } else {
+        console.warn("No updatedDataHints received from AI!");
       }
       setHasFetchedLive(true);
     } catch (e) {
@@ -113,6 +186,62 @@ export default function App() {
       alert("Analysis failed. Please check console or API key.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSendSuggestion = async () => {
+    if (!suggestionMessage.trim()) {
+      alert('Please enter a message before sending.');
+      return;
+    }
+
+    const emailScriptUrl = import.meta.env.VITE_EMAIL_SCRIPT_URL as string | undefined;
+
+    if (!emailScriptUrl) {
+      // Fallback to mailto if no Apps Script URL configured
+      const subject = encodeURIComponent('Update Suggestion for VaxInsight');
+      const body = encodeURIComponent(suggestionMessage);
+      const mailtoUrl = `mailto:sagearbor+vaccineUpdateDashboard@gmail.com?subject=${subject}&body=${body}`;
+      window.open(mailtoUrl, '_blank');
+      alert('Email client should open. If not configured, please email sagearbor+vaccineUpdateDashboard@gmail.com directly.');
+      setShowSuggestModal(false);
+      setSuggestionMessage('');
+      return;
+    }
+
+    setSendingEmail(true);
+    try {
+      // Use fetch with redirect:follow to handle Apps Script redirects
+      const response = await fetch(emailScriptUrl, {
+        method: 'POST',
+        body: JSON.stringify({
+          subject: 'Update Suggestion for VaxInsight',
+          message: suggestionMessage
+        }),
+        redirect: 'follow'
+      });
+
+      console.log('Email response status:', response.status);
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('Email result:', result);
+        if (result.success) {
+          alert('Thank you! Your suggestion has been sent.');
+        } else {
+          alert('Email may not have been sent. Error: ' + (result.message || 'Unknown'));
+        }
+      } else {
+        console.error('Email failed with status:', response.status);
+        alert('Failed to send (status ' + response.status + '). Please try again.');
+      }
+      setShowSuggestModal(false);
+      setSuggestionMessage('');
+    } catch (error) {
+      console.error('Failed to send email:', error);
+      alert('Failed to send. Please try again or email sagearbor+vaccineUpdateDashboard@gmail.com directly.');
+    } finally {
+      setSendingEmail(false);
     }
   };
 
@@ -137,6 +266,55 @@ export default function App() {
             <div className="flex justify-end gap-2">
               <button onClick={() => setShowPasswordModal(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded">Cancel</button>
               <button onClick={handleAdminLogin} className="px-4 py-2 bg-slate-900 text-white rounded hover:bg-slate-800">Unlock</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Suggest Update Modal */}
+      {showSuggestModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm p-4">
+          <div className="bg-white p-6 rounded-xl shadow-2xl max-w-2xl w-full relative">
+            <button onClick={() => setShowSuggestModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600">
+              <X size={24} />
+            </button>
+            <h3 className="text-xl font-bold mb-4 flex items-center gap-2 text-slate-800">
+              <Mail size={24} className="text-blue-600"/> Suggest an Update
+            </h3>
+            <p className="text-slate-600 mb-4 text-sm">
+              Have you noticed a recent vaccine policy change or HHS update? Share the details below and we'll review it for inclusion in the dashboard.
+            </p>
+            <textarea
+              value={suggestionMessage}
+              onChange={(e) => setSuggestionMessage(e.target.value)}
+              placeholder="Please describe the vaccine update or policy change..."
+              className="w-full border border-slate-300 rounded-lg px-4 py-3 mb-4 min-h-[200px] text-slate-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+            />
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowSuggestModal(false)}
+                disabled={sendingEmail}
+                className="px-5 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors font-medium disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSendSuggestion}
+                disabled={sendingEmail}
+                className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors font-semibold flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {sendingEmail ? (
+                  <>
+                    <RefreshCw size={18} className="animate-spin" />
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <Mail size={18} />
+                    Send Suggestion
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>
@@ -183,7 +361,7 @@ export default function App() {
                 title="Admin Login"
               >
                 <Shield className="text-emerald-400" />
-                VaxInsight
+                VaxInsight<sub className="text-xs font-normal text-slate-400 ml-1">v0.15</sub>
               </h1>
               <p className="text-slate-400 mt-2 max-w-2xl">
                 Visualizing the trade-offs in public health policy: Immunity Duration vs. Disease Severity.
@@ -222,13 +400,13 @@ export default function App() {
                     </button>
                 </div>
               ) : (
-                <a 
-                  href="mailto:sagearbor+vaccineUpdateDasboard@gmail.com?subject=Update Suggestion for VaxInsight"
+                <button
+                  onClick={() => setShowSuggestModal(true)}
                   className="flex items-center gap-2 px-5 py-3 rounded-lg font-semibold bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/50 transition-all"
                 >
                   <Mail size={20} />
                   Suggest Update
-                </a>
+                </button>
               )}
             </div>
           </div>
@@ -315,12 +493,12 @@ export default function App() {
             </div>
             <div className="prose prose-slate max-w-none text-slate-600 bg-slate-50 p-6 rounded-lg border border-slate-100">
                 {hasFetchedLive && analysis.summary ? (
-                    <div className="whitespace-pre-line leading-relaxed">
-                        {analysis.summary}
+                    <div className="space-y-3">
+                        {formatMarkdown(analysis.summary)}
                     </div>
                 ) : (
-                    <div className="text-slate-500 italic">
-                        {MOCK_ANALYSIS}
+                    <div className="space-y-3">
+                        {formatMarkdown(MOCK_ANALYSIS)}
                     </div>
                 )}
             </div>

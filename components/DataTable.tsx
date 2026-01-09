@@ -6,6 +6,29 @@ interface DataTableProps {
   data: VaccineData[];
 }
 
+// Helper to get clean status (truncate if AI put too much text in it)
+const getCleanStatus = (status: string): string => {
+  if (!status) return 'Unknown';
+  // If status is too long or contains extra text, extract just the first word
+  if (status.length > 15 || status.includes(',') || status.includes('.')) {
+    const firstWord = status.split(/[\s,.:]/)[0];
+    if (['Recommended', 'Modified', 'Paused', 'Revoked'].includes(firstWord)) {
+      return firstWord;
+    }
+    return 'Modified';
+  }
+  return status;
+};
+
+// Helper to escape CSV fields (wrap in quotes if contains comma, quote, or newline)
+const escapeCSVField = (field: any): string => {
+  const str = String(field ?? '');
+  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+};
+
 export const DataTable: React.FC<DataTableProps> = ({ data }) => {
   const downloadCSV = () => {
     const headers = ["ID", "Name", "Disease", "Immunity Duration (Years)", "Deaths/1M", "R0 (Contagiousness)", "Status", "Change Notes"];
@@ -16,13 +39,13 @@ export const DataTable: React.FC<DataTableProps> = ({ data }) => {
       d.immunityDurationYears,
       d.deathsPerMillion,
       d.contagiousnessR0,
-      d.status,
+      getCleanStatus(d.status), // Use clean status for CSV
       d.recentChangeDescription || ''
     ]);
 
-    const csvContent = "data:text/csv;charset=utf-8," 
-      + headers.join(",") + "\n" 
-      + rows.map(e => e.join(",")).join("\n");
+    const csvContent = "data:text/csv;charset=utf-8,"
+      + headers.map(escapeCSVField).join(",") + "\n"
+      + rows.map(row => row.map(escapeCSVField).join(",")).join("\n");
 
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
@@ -72,18 +95,23 @@ export const DataTable: React.FC<DataTableProps> = ({ data }) => {
                 <td className="px-6 py-4">{row.deathsPerMillion.toLocaleString()}</td>
                 <td className="px-6 py-4">{row.contagiousnessR0}</td>
                 <td className="px-6 py-4">
-                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                     row.status === 'Recommended' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 
-                     row.status === 'Modified' ? 'bg-amber-50 text-amber-700 border border-amber-100' : 
-                     'bg-rose-50 text-rose-700 border border-rose-100'
-                  }`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${
-                       row.status === 'Recommended' ? 'bg-emerald-500' : 
-                       row.status === 'Modified' ? 'bg-amber-500' : 
-                       'bg-rose-500'
-                    }`}></span>
-                    {row.status}
-                  </span>
+                  {(() => {
+                    const cleanStatus = getCleanStatus(row.status);
+                    return (
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                         cleanStatus === 'Recommended' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
+                         cleanStatus === 'Modified' ? 'bg-amber-50 text-amber-700 border border-amber-100' :
+                         'bg-rose-50 text-rose-700 border border-rose-100'
+                      }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${
+                           cleanStatus === 'Recommended' ? 'bg-emerald-500' :
+                           cleanStatus === 'Modified' ? 'bg-amber-500' :
+                           'bg-rose-500'
+                        }`}></span>
+                        {cleanStatus}
+                      </span>
+                    );
+                  })()}
                 </td>
               </tr>
             ))}

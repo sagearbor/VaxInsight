@@ -36,8 +36,7 @@ export const INITIAL_VACCINE_DATA: VaccineData[] = [
     immunityLabel: '6-12 Months',
     deathsPerMillion: 15, // Varies wildly by strain/year
     contagiousnessR0: 1.5,
-    status: 'Modified', // Changed to show color contrast in UI
-    recentChangeDescription: 'Annual strain updates required; recommendations vary by season.',
+    status: 'Recommended',
     sideEffectRisk: 'Low',
     category: 'Viral'
   },
@@ -85,8 +84,7 @@ export const INITIAL_VACCINE_DATA: VaccineData[] = [
     immunityLabel: '4-6 Months',
     deathsPerMillion: 100, // Varies by age heavily
     contagiousnessR0: 9, // Omicron variants
-    status: 'Modified', // Changed to show color contrast in UI
-    recentChangeDescription: 'Shifted to seasonal recommendation for high-risk groups.',
+    status: 'Recommended',
     sideEffectRisk: 'Moderate', // Reactogenicity
     category: 'Viral'
   },
@@ -113,6 +111,66 @@ export const INITIAL_VACCINE_DATA: VaccineData[] = [
     status: 'Recommended',
     sideEffectRisk: 'Low',
     category: 'Viral'
+  },
+  {
+    id: 'hepb',
+    name: 'Hepatitis B',
+    disease: 'Hepatitis B',
+    immunityDurationYears: 30,
+    immunityLabel: 'Decades/Life',
+    deathsPerMillion: 150, // Chronic infection risk
+    contagiousnessR0: 3,
+    status: 'Recommended',
+    sideEffectRisk: 'Low',
+    category: 'Viral'
+  },
+  {
+    id: 'hepa',
+    name: 'Hepatitis A',
+    disease: 'Hepatitis A',
+    immunityDurationYears: 25,
+    immunityLabel: 'Decades/Life',
+    deathsPerMillion: 30,
+    contagiousnessR0: 2.5,
+    status: 'Recommended',
+    sideEffectRisk: 'Low',
+    category: 'Viral'
+  },
+  {
+    id: 'rotavirus',
+    name: 'Rotavirus',
+    disease: 'Rotavirus',
+    immunityDurationYears: 3,
+    immunityLabel: '2-3 Years',
+    deathsPerMillion: 50, // Primarily affects infants
+    contagiousnessR0: 8,
+    status: 'Recommended',
+    sideEffectRisk: 'Low',
+    category: 'Viral'
+  },
+  {
+    id: 'hib',
+    name: 'Hib (H. influenzae)',
+    disease: 'Haemophilus influenzae type b',
+    immunityDurationYears: 15,
+    immunityLabel: '10-15+ Years',
+    deathsPerMillion: 300, // Meningitis risk in children
+    contagiousnessR0: 1.5,
+    status: 'Recommended',
+    sideEffectRisk: 'Low',
+    category: 'Bacterial'
+  },
+  {
+    id: 'pcv',
+    name: 'PCV (Pneumococcal)',
+    disease: 'Pneumococcal Disease',
+    immunityDurationYears: 10,
+    immunityLabel: '5-10 Years',
+    deathsPerMillion: 200, // Pneumonia/meningitis
+    contagiousnessR0: 2,
+    status: 'Recommended',
+    sideEffectRisk: 'Low',
+    category: 'Bacterial'
   }
 ];
 
