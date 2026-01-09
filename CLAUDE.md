@@ -17,12 +17,12 @@ npm run preview      # Preview production build
 
 ## Environment Setup
 
-Create `.env.local` with your Gemini API key:
+Create `.env` or `.env.local` with your Gemini API key:
 ```
-GEMINI_API_KEY=your_key_here
+VITE_GEMINI_API_KEY=your_key_here
 ```
 
-The API key is injected via Vite's `define` config in `vite.config.ts`.
+Vite automatically exposes `VITE_*` prefixed variables via `import.meta.env`.
 
 ## Architecture
 
